@@ -30,8 +30,10 @@ All application services live in the **`default` namespace** and expose **port 8
 
 3. **Choose local port.**
    - If the user explicitly provided a port, use it (and save it — see step 5).
-   - Otherwise, read `/Users/pavelt/.cursor/skills/k8s-port-forward/ports.json` and check if the service has a saved port. If yes, ask: *"Last time you used port `<SAVED_PORT>` for `<SERVICE>` — use it again?"* and proceed with the answer.
-   - If no saved port and none provided, default to **5100**.
+   - Otherwise, read `/Users/pavelt/.cursor/skills/k8s-port-forward/ports.json` and check if the service has a saved port.
+   - If a saved port exists, use the `AskQuestion` tool with exactly these options: option 1 = `"Use saved port <SAVED_PORT>"` (id: `saved`), option 2 = `"Enter a custom port"` (id: `custom`)
+   - If no saved port exists, ask for a port with a free-text ask: *"Enter the port number:"* and wait for their reply.
+   - If the user picks `custom`, follow up with a free-text ask: *"Enter the port number:"* and wait for their reply.
 
 4. **Start port-forward** (run in background with `block_until_ms: 0`):
    ```bash
@@ -56,7 +58,7 @@ ps aux | grep "port-forward.*<SERVICE>" | grep -v grep | awk '{print $2}' | xarg
 
 ## Examples
 
-- "port-forward media" → finds `dotnet-media-*` pod on staging, forwards to `localhost:5100`
+- "port-forward media" → finds `dotnet-media-*` pod on staging, uses saved port or asks for one
 - "pf identity-management to 5110" → finds `dotnet-identity-management-*`, forwards to `localhost:5110`
-- "forward media-api on dev" → switches to dev cluster, finds `dotnet-media-api-*`, forwards to `localhost:5100`
+- "forward media-api on dev" → switches to dev cluster, finds `dotnet-media-api-*`, uses saved port or asks for one
 - "connect to graphql-gateway 5200" → finds `dotnet-graphql-gateway-*`, forwards to `localhost:5200`
