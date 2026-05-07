@@ -16,9 +16,22 @@ All application services live in the **`default` namespace** and expose **port 8
 
 ## Workflow
 
-1. **Resolve the target context.** If the user specifies `dev` or `staging`, use that cluster; otherwise use the current context (staging by default).
+1. **Check active forwards.** Before doing anything else, run:
+   ```bash
+   ps aux | grep "kubectl port-forward" | grep -v grep \
+     | awk '{for(i=1;i<=NF;i++) if($i~/port-forward/) {cmd=substr($0, index($0,$11)); break}; print NR". "cmd}'
+   ```
+   Parse the output to build a table of **service → local port** from the running `kubectl port-forward` processes (extract the pod name and `LOCAL:80` pair from each command line). Present this to the user in a short list, e.g.:
+   ```
+   Active forwards:
+     • identity-management  →  http://localhost:5110
+     • media-api            →  http://localhost:5200
+   ```
+   If the service the user wants to forward **is already in this list**, point it out and ask whether they want to kill the stale one and re-forward, or leave it as-is (use the `AskQuestion` tool: option 1 = `"Re-forward (kill stale & reconnect)"`, option 2 = `"Leave it, just show me the URL"`). If the user chooses option 2, report the existing URL and stop.
 
-2. **Find a running pod** matching the service name:
+2. **Resolve the target context.** If the user specifies `dev` or `staging`, use that cluster; otherwise use the current context (staging by default).
+
+3. **Find a running pod** matching the service name:
    ```bash
    kubectl get pods -n default --context=<CONTEXT> --no-headers \
      | grep "^dotnet-<SERVICE>" \
@@ -28,21 +41,21 @@ All application services live in the **`default` namespace** and expose **port 8
    ```
    If nothing matches, try a broader grep (partial service name). If still nothing, report it to the user.
 
-3. **Choose local port.**
+4. **Choose local port.**
    - If the user explicitly provided a port, use it (and save it — see step 5).
    - Otherwise, read `/Users/pavelt/.cursor/skills/k8s-port-forward/ports.json` and check if the service has a saved port.
    - If a saved port exists, use the `AskQuestion` tool with exactly these options: option 1 = `"Use saved port <SAVED_PORT>"` (id: `saved`), option 2 = `"Enter a custom port"` (id: `custom`)
    - If no saved port exists, ask for a port with a free-text ask: *"Enter the port number:"* and wait for their reply.
    - If the user picks `custom`, follow up with a free-text ask: *"Enter the port number:"* and wait for their reply.
 
-4. **Start port-forward** (run in background with `block_until_ms: 0`):
+5. **Start port-forward** (run in background with `block_until_ms: 0`):
    ```bash
    kubectl port-forward -n default --context=<CONTEXT> pod/<POD_NAME> <LOCAL_PORT>:80
    ```
 
-5. **Save the port.** After a successful forward, update `ports.json` with `{ "<SERVICE>": <LOCAL_PORT> }` (merge, don't overwrite other entries).
+6. **Save the port.** After a successful forward, update `ports.json` with `{ "<SERVICE>": <LOCAL_PORT> }` (merge, don't overwrite other entries).
 
-6. **Confirm** to the user: "Forwarding `<SERVICE>` → `http://localhost:<LOCAL_PORT>`"
+7. **Confirm** to the user: "Forwarding `<SERVICE>` → `http://localhost:<LOCAL_PORT>`"
 
 ## Stop workflow
 
