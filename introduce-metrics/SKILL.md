@@ -25,8 +25,8 @@ namespace {ServiceNamespace}.Domain.Services.{Feature};
 
 public interface I{Feature}Metrics
 {
-    void Record{EventA}();          // add methods per metric
-    void Record{EventB}(string tag);
+    void Record{EventA}(double value);
+    void Record{EventB}(double value, string tag);
 }
 ```
 
@@ -54,8 +54,8 @@ public class {ServiceName}Metrics : I{Feature}Metrics  // add more interfaces as
     private const string SomeTag = "some_tag";
 
     // instrument fields
-    private readonly Counter<long> _{eventA}Counter;
-    private readonly Counter<long> _{eventB}Counter;
+    private readonly Histogram<double> _{eventA}Histogram;
+    private readonly Histogram<double> _{eventB}Histogram;
 
     public {ServiceName}Metrics(IMeterFactory meterFactory, string appName)
     {
@@ -63,18 +63,18 @@ public class {ServiceName}Metrics : I{Feature}Metrics  // add more interfaces as
 
         var meter = meterFactory.Create(MeterName);
 
-        _{eventA}Counter = meter.CreateCounter<long>(MetricName("{feature}.{event_a}"));
-        _{eventB}Counter = meter.CreateCounter<long>(MetricName("{feature}.{event_b}"));
+        _{eventA}Histogram = meter.CreateHistogram<double>(MetricName("{feature}.{event_a}"));
+        _{eventB}Histogram = meter.CreateHistogram<double>(MetricName("{feature}.{event_b}"));
     }
 
-    public void Record{EventA}()
+    public void Record{EventA}(double value)
     {
-        _{eventA}Counter.Add(1);
+        _{eventA}Histogram.Record(value);
     }
 
-    public void Record{EventB}(string someTag)
+    public void Record{EventB}(double value, string someTag)
     {
-        _{eventB}Counter.Add(1, new KeyValuePair<string, object?>(SomeTag, someTag));
+        _{eventB}Histogram.Record(value, new KeyValuePair<string, object?>(SomeTag, someTag));
     }
 }
 ```
@@ -84,7 +84,7 @@ If the class **already exists**, just:
 - Add the new instrument fields to the constructor
 - Add the new `Record*` method implementations
 
-For histograms use `Histogram<double>` and `.Record(value, tags)` instead of `.Add`.
+Histograms are the default. Use `Counter<long>` with `.Add(1, tags)` only when you need a pure count with no distribution (e.g. error counts).
 
 ---
 
@@ -126,6 +126,7 @@ If `SetTelemetry` with `metricsAction` is **not yet present**, add it inside `.C
 
 | Concept | Convention | Example |
 |---------|-----------|---------|
+| Default instrument | `Histogram<double>` | — |
 | Meter name | `{servicename}` (lowercase) | `"tournaments"` |
 | Metric name | `{appName}.{feature}.{event}` (dots, lowercase) | `"tournaments-service.geolocation.resolution.failures"` |
 | Tag names | `snake_case` | `"provider"`, `"resolution_type"` |
