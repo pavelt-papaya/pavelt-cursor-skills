@@ -1,6 +1,13 @@
 ---
 name: introduce-metrics
-description: Introduces metrics instrumentation to a .NET Shine service. Creates a feature-specific metrics interface, adds its implementation to the shared metrics class, registers it in DI, and exports the meter in Program.cs. Use this skill immediately and automatically whenever the user says "introduce metrics", "add metrics", "create metrics", "implement metrics", or asks to instrument a Shine service — for example "introduce mediaMetrics", "add metrics to the media service", "create metrics for X". Do not ask for clarification, just execute the workflow.
+description: >-
+  Introduces metrics instrumentation to a .NET Shine service. Creates a feature-specific metrics
+  interface, adds its implementation to the shared metrics class, registers it in DI, and exports
+  the meter in Program.cs. Use this skill immediately and automatically whenever the user says
+  "introduce metrics", "add metrics", "use metrics", "create metrics", "implement metrics",
+  "metrics in code", or asks to instrument or add observability to a Shine service — for example
+  "introduce metrics for repository queue", "add metrics to the media service", "use metrics in code",
+  "create metrics for X". Do not ask for clarification, just execute the workflow.
 ---
 
 # Introduce Metrics
