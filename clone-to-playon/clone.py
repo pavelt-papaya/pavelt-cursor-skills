@@ -9,9 +9,11 @@ Steps (each step is idempotent):
   1. Validate OLD/NEW paths and NEW git remote
   2. Mirror OLD -> NEW via rsync (excluding .git, bin, obj)
   3. Patch .github/workflows/ci.yml: prefix `repository_name` value with `playon-`
-  4. Inject `<PackageId>Shine.Playon.<rest></PackageId>` into every packable .csproj
-  5. Remove top-level README.md (the playon repo gets its own later, if any)
-  6. Print `git status` of NEW for review
+  4. Rename `Shine.<rest>.sln` -> `Shine.Playon.<rest>.sln` and rewrite any
+     references to the old solution filename in text files (e.g. Dockerfile)
+  5. Inject `<PackageId>Shine.Playon.<rest></PackageId>` into every packable .csproj
+  6. Remove top-level README.md (the playon repo gets its own later, if any)
+  7. Print `git status` of NEW for review
 
 Does NOT stage, commit, or push - that is up to the caller.
 
@@ -110,6 +112,68 @@ def patch_ci(new: Path) -> None:
         info("  ci.yml: no change needed (already prefixed or no match)")
 
 
+SLN_REF_SKIP_DIRS = {".git", "bin", "obj", "node_modules"}
+
+
+def rename_solution(new: Path) -> None:
+    sln_files = sorted(new.glob("*.sln"))
+    shine_sln = [
+        p for p in sln_files
+        if p.stem.startswith("Shine.") and not p.stem.startswith("Shine.Playon.")
+    ]
+    playon_sln = [p for p in sln_files if p.stem.startswith("Shine.Playon.")]
+
+    if not shine_sln and playon_sln:
+        info(f"  already renamed: {playon_sln[0].name}")
+        return
+    if not shine_sln:
+        info("  no Shine.*.sln found at repo root, skipping")
+        return
+    if len(shine_sln) > 1:
+        info(
+            f"  WARNING: multiple Shine.*.sln files at repo root, skipping rename: "
+            f"{[p.name for p in shine_sln]}"
+        )
+        return
+    if playon_sln:
+        info(
+            f"  WARNING: both Shine.* and Shine.Playon.* sln files exist, skipping: "
+            f"{[p.name for p in sln_files]}"
+        )
+        return
+
+    old_sln = shine_sln[0]
+    m = re.match(r"^Shine\.(.+)$", old_sln.stem)
+    if not m:
+        info(f"  WARNING: cannot parse {old_sln.name}, skipping")
+        return
+    new_sln = old_sln.with_name(f"Shine.Playon.{m.group(1)}.sln")
+    old_sln.rename(new_sln)
+    info(f"  renamed: {old_sln.name} -> {new_sln.name}")
+
+    old_name = old_sln.name
+    new_name = new_sln.name
+    updated = 0
+    for path in new.rglob("*"):
+        if not path.is_file():
+            continue
+        if any(part in SLN_REF_SKIP_DIRS for part in path.relative_to(new).parts):
+            continue
+        if path.suffix == ".sln":
+            continue
+        try:
+            text = path.read_text()
+        except (UnicodeDecodeError, OSError):
+            continue
+        if old_name not in text:
+            continue
+        path.write_text(text.replace(old_name, new_name))
+        info(f"  updated reference in: {path.relative_to(new)}")
+        updated += 1
+    if updated == 0:
+        info(f"  no references to {old_name} found in repo")
+
+
 def patch_csprojs(new: Path) -> None:
     patched = 0
     for csproj in sorted(new.rglob("*.csproj")):
@@ -181,19 +245,22 @@ def main() -> None:
     info(f"OLD: {old}")
     info(f"NEW: {new}")
 
-    info("\n[1/5] Validating...")
+    info("\n[1/6] Validating...")
     validate(old, new)
 
-    info("\n[2/5] Mirroring files (rsync)...")
+    info("\n[2/6] Mirroring files (rsync)...")
     mirror(old, new)
 
-    info("\n[3/5] Patching .github/workflows/ci.yml...")
+    info("\n[3/6] Patching .github/workflows/ci.yml...")
     patch_ci(new)
 
-    info("\n[4/5] Patching packable .csproj files...")
+    info("\n[4/6] Renaming solution to Shine.Playon.*.sln and updating references...")
+    rename_solution(new)
+
+    info("\n[5/6] Patching packable .csproj files...")
     patch_csprojs(new)
 
-    info("\n[5/5] Removing README.md if present...")
+    info("\n[6/6] Removing README.md if present...")
     remove_readme(new)
 
     info("\nGit status of NEW (review before committing):")

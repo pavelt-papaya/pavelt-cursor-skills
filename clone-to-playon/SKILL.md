@@ -76,11 +76,21 @@ python3 ~/.cursor/skills/clone-to-playon/clone.py <service> --workdir /custom/pa
    This single value is what the reusable build pipeline
    (`papaya-shine/devops-ci-pipelines/.github/workflows/build.yaml@main`) uses
    to **also** name the ECR Docker image (e.g.
-   `…/playon-games-service:<tag>`). The Dockerfile itself contains no
-   service-specific image references and does not need patching - only base
-   images and the .NET assembly entry point, both of which stay the same.
+   `…/playon-games-service:<tag>`). The Dockerfile's base images and .NET
+   assembly entry point stay the same; only its solution-name reference is
+   rewritten by step 4 below.
 
-3. **Patch packable .csproj files** - for every `.csproj` containing
+3. **Rename solution file + update references** - rename the repo-root
+   `Shine.<rest>.sln` to `Shine.Playon.<rest>.sln`, then walk the repo and
+   replace any literal occurrence of the old `.sln` filename in text files
+   (Dockerfile, scripts, workflows, etc.) with the new one. Skips `.git`,
+   `bin`, `obj`, and `node_modules`, and never rewrites the `.sln` file
+   itself. Example: `Shine.Games.sln` → `Shine.Playon.Games.sln`, and
+   `dotnet publish "Shine.Games.sln"` in the Dockerfile becomes
+   `dotnet publish "Shine.Playon.Games.sln"`. Idempotent: a no-op if a
+   `Shine.Playon.*.sln` already exists and no `Shine.*.sln` does.
+
+4. **Patch packable .csproj files** - for every `.csproj` containing
    `<GeneratePackageOnBuild>true</GeneratePackageOnBuild>`, inject an explicit
    `<PackageId>Shine.Playon.<rest>` derived from the project filename pattern
    `Shine.<rest>.csproj`. Skips files that already have a `<PackageId>` element.
@@ -88,9 +98,9 @@ python3 ~/.cursor/skills/clone-to-playon/clone.py <service> --workdir /custom/pa
    `<PackageId>Shine.Playon.Games.Messages</PackageId>` immediately under
    `<GeneratePackageOnBuild>`.
 
-4. **Remove README.md** - the playon repo gets its own (or none) later.
+5. **Remove README.md** - the playon repo gets its own (or none) later.
 
-5. **Print `git status`** of the new repo for the user's review.
+6. **Print `git status`** of the new repo for the user's review.
 
 The script is idempotent: re-running it on an already-transformed target is
 safe. It does NOT stage, commit, or push.
@@ -125,8 +135,11 @@ the skill must not touch them:
 - `.cs` source files, mapping profiles, controllers, validators
 - `migrations/content/*.js` (index changes happen as part of feature work)
 - `src/*.Host/appsettings.json`, `launchSettings.json`
-- `Directory.Packages.props`, `*.sln`, `Dockerfile`, `.gitignore`, `.config/`
-  (verified byte-identical between OLD and NEW in reference clone)
+- `Directory.Packages.props`, `.gitignore`, `.config/` (byte-identical between
+  OLD and NEW in reference clone)
+- `Dockerfile` and `*.sln` are touched **only** by the solution-rename step
+  (filename change + `dotnet publish "<sln>"` rewrite); their other contents
+  are left as-is.
 
 Also out of scope (different repo entirely):
 
