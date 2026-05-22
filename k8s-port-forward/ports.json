@@ -1,4 +1,6 @@
 {
+  "identity-management": 5110,
   "media-processing": 5169,
-  "media-api": 5500
+  "media-api": 5500,
+  "payments": 5172
 }
