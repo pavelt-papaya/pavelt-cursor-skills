@@ -11,7 +11,7 @@ description: Deploys a service by updating the image.tag in Helm values YAML fil
 2. Skill reads the **source project's root folder name** and uses it to determine:
    - The **service** (via matching `githubRepo:` in helm values).
    - The **CI repo** to deploy through (Shine vs Playon edition — see below).
-3. In the chosen CI repo: sync `main`, create a feature branch, update `image.tag` for the requested env(s), commit, push.
+3. In the chosen CI repo: checkout and update `main` to the latest, create a feature branch from that `main`, update `image.tag` for the requested env(s), commit, push.
 
 ---
 
@@ -96,7 +96,9 @@ This avoids accidentally running commands (or, worse, modifying git config) agai
 
 ---
 
-## Step 2 — Sync the CI repo's `main`
+## Step 2 — Checkout and update `main` to the latest
+
+To create a branch we need to checkout and update `main` to the latest. Do this **before** creating the feature branch, even if the CI repo is currently on another branch.
 
 Use `-C` so we don't depend on `cd`:
 
@@ -106,7 +108,7 @@ git -C <CI_REPO> checkout main
 git -C <CI_REPO> pull origin main
 ```
 
-If `git status --short` shows a dirty working tree, or `git status -sb` shows we're already on a non-`main` branch, **stop** and ask the user how to proceed.
+If `git status --short` shows a dirty working tree, **stop** and ask the user how to proceed. Do not stop merely because the current branch is not `main` — switch to `main` and pull latest, then continue.
 
 ---
 
@@ -132,7 +134,7 @@ If a target env file doesn't exist (e.g. `staging/<service>.yaml` is missing), r
 
 ## Step 5 — Create a feature branch and commit
 
-Branch naming: `feature/<service-name>_<version>` (env is **not** in the branch name).
+Create the feature branch only after Step 2 has checked out `main` and updated it to the latest. Branch naming: `feature/<service-name>_<version>` (env is **not** in the branch name).
 
 ```bash
 git -C <CI_REPO> checkout -b feature/<service-name>_<version>
@@ -172,6 +174,6 @@ Report:
 - **Source repo cannot be detected** (not in a git repo and no folder name to derive from): Ask the user for both the service name and which edition (Shine / Playon) to target.
 - **Service exists in both CI repos**: Use the edition derived from the source project's prefix. If still ambiguous, ask.
 - **`<CI_REPO>` not present locally**: Report the missing path and ask the user to clone it (don't try to clone automatically).
-- **`<CI_REPO>` working tree is dirty or on a non-main branch**: Report `git status` and ask before continuing.
+- **`<CI_REPO>` working tree is dirty**: Report `git status` and ask before continuing. Being on a non-`main` branch is not a stop — checkout and update `main` to the latest, then create the feature branch from it.
 - **Target env yaml file missing**: Report and ask whether to copy from dev or skip that env.
 - **`working_directory` confusion**: If `pwd` returns a path other than the one requested (sandbox silently ignored `cd`), switch to `git -C` and absolute paths immediately.
