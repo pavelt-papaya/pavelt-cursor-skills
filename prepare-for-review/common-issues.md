@@ -46,9 +46,13 @@ Format for new items:
 ## `mapping` — Manual DTO / model conversion
 
 - **Detect:** Hand-written property-by-property copies between entities, DTOs,
-  request, and response types. User rule: use AutoMapper for these conversions.
+  request, and response types — including private helpers like `ToResult` /
+  `ToDto` in a domain service. A short “local projection” is still a mapping.
 - **Fix:** Map via an existing AutoMapper profile, or add a profile next to the
-  project's existing mapping profiles. Do not introduce a new mapper library.
+  project's existing mapping profiles (a Domain profile if the conversion lives
+  in Domain). Inject `IMapper` where the copy sits. Do not skip because the
+  copy is short, or because that project did not already reference AutoMapper.
+  Do not introduce a new mapper library.
 - **Mode:** auto-fix
 
 ---
@@ -56,18 +60,22 @@ Format for new items:
 ## `validation` — Endpoints without FluentValidation / ObjectId guards
 
 - **Detect:**
-  1. New or changed REST or GraphQL operations that accept a payload
-     without a request/input DTO + FluentValidation validator. User rule: endpoints
-     always have validation this way.
+  1. New or changed REST or GraphQL operations that accept input without a
+     request/input DTO + FluentValidation validator — including **query-string
+     and combined query/route** parameters (filters, limits, currency, etc.),
+     not only a JSON body. User rule: endpoints always have validation this way.
+     Exception: a lone ObjectId path/query id uses `Guard.Against.NotObjectId`
+     in the method (see point 2); do not wrap that in a DTO.
   2. New or changed methods that take a string id in the **signature** (path, query,
      GraphQL argument, or a service parameter) that is later used as a Mongo ObjectId,
      and that id is **not** already covered by an input DTO FluentValidation rule
      (`ObjectIdValidator` or equivalent).
 - **Fix:**
   - Add (or complete) the input DTO and a FluentValidation validator, and
-    wire it the same way neighbouring endpoints do. Validate input shape and
-    obvious field rules here; do not duplicate domain invariants that already
-    throw from the service.
+    wire it the same way neighbouring endpoints do. Bind query fields with
+    `[FromQuery]` on the DTO (same pattern as `WalletBaseRequestDto` for route).
+    Validate input shape and obvious field rules here; do not duplicate domain
+    invariants that already throw from the service.
   - For a signature id that the input validator does not cover, add
     `Guard.Against.NotObjectId(id)` at the start of the method (Ardalis + the
     project's `NotObjectId` extension, same as neighbouring GraphQL methods).
