@@ -23,9 +23,11 @@ Format for new items:
 - **Detect:** New or edited comments that narrate implementation (`// call the service`,
   `// return result`), XML docs (`/// <summary>`), or comments on interfaces /
   abstract members that have no implementation.
-- **Fix:** Delete them. Keep a comment only if the user asked for docs, the file
-  already uses a consistent doc convention, or a short comment is required to
-  explain non-obvious intent, a trade-off, or a constraint the code cannot convey.
+- **Fix:** Delete them. Keep a comment if it contains an external link (http/https URL),
+  the user asked for docs, the file already uses a consistent doc convention, or a
+  short comment is required to explain non-obvious intent, a trade-off, or a
+  constraint the code cannot convey. Do not strip the surrounding comment block just
+  to drop narration when a link is in it.
 - **Mode:** auto-fix
 
 ---
@@ -142,3 +144,19 @@ Format for new items:
   looks unused, treat it as `dead-code` (API may still be coming). The opinion
   pass can propose querying the source document instead.
 - **Mode:** ask-before-redesign
+
+---
+
+## `x86` — Solution x86 configurations
+
+- **Detect:** `.sln` `SolutionConfigurationPlatforms` or `ProjectConfigurationPlatforms` entries for `x86` (e.g. `Debug|x86`, `Release|x86`), or a changed `.csproj` that lists `x86` in `<Platforms>` / `<PlatformTarget>`. These usually appear when a project is added in the IDE.
+- **Fix:** Remove every x86 solution configuration and its per-project mappings. Leave `Debug|Any CPU` and `Release|Any CPU`. If a csproj in the diff added `x86` to `<Platforms>` or set `<PlatformTarget>x86</PlatformTarget>`, drop that too so the project matches AnyCPU-only neighbours.
+- **Mode:** auto-fix
+
+---
+
+## `one-class` — One class per file
+
+- **Detect:** A new or edited file with more than one top-level type (`class`, `record`, `interface`, `struct`, `enum`). Nested types and additional `partial` files of the **same** type are fine.
+- **Fix:** Move each extra top-level type into its own file named after that type, same namespace and folder as neighbouring types. Do not split generated files.
+- **Mode:** auto-fix

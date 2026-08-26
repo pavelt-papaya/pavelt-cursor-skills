@@ -19,6 +19,10 @@ on the other side has less to flag.
 Do not ask for clarification. Do not commit or push. Do not run Bugbot or a
 full architecture redesign unless the user asks.
 
+Do not build, restore, or test the solution (`dotnet build`, `dotnet test`,
+`dotnet restore`, or equivalent). After pass 2, tell the user to build locally
+to verify the changes.
+
 The issue catalog is [common-issues.md](common-issues.md). Keep that file the
 source of truth. When the user pastes a new repeating PR comment and wants it
 remembered, append a new item there in the same format.
@@ -98,6 +102,9 @@ End with a short report:
 `Skipped` is for catalog items marked **ask-before-redesign**, or for hits
 that would change behaviour beyond the nit. Do not delete unused members or
 types without the user confirming — they may be waiting on an API.
+
+After the report, one short line: ask the user to build locally. Do not run
+the build yourself.
 
 ---
 
