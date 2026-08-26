@@ -53,15 +53,25 @@ Format for new items:
 
 ---
 
-## `validation` — Endpoints without FluentValidation
+## `validation` — Endpoints without FluentValidation / ObjectId guards
 
-- **Detect:** New or changed REST or GraphQL operations that accept a payload
-  without a request/input DTO + FluentValidation validator. User rule: endpoints
-  always have validation this way.
-- **Fix:** Add (or complete) the input DTO and a FluentValidation validator, and
-  wire it the same way neighbouring endpoints do. Validate input shape and
-  obvious field rules here; do not duplicate domain invariants that already
-  throw from the service.
+- **Detect:**
+  1. New or changed REST or GraphQL operations that accept a payload
+     without a request/input DTO + FluentValidation validator. User rule: endpoints
+     always have validation this way.
+  2. New or changed methods that take a string id in the **signature** (path, query,
+     GraphQL argument, or a service parameter) that is later used as a Mongo ObjectId,
+     and that id is **not** already covered by an input DTO FluentValidation rule
+     (`ObjectIdValidator` or equivalent).
+- **Fix:**
+  - Add (or complete) the input DTO and a FluentValidation validator, and
+    wire it the same way neighbouring endpoints do. Validate input shape and
+    obvious field rules here; do not duplicate domain invariants that already
+    throw from the service.
+  - For a signature id that the input validator does not cover, add
+    `Guard.Against.NotObjectId(id)` at the start of the method (Ardalis + the
+    project's `NotObjectId` extension, same as neighbouring GraphQL methods).
+    Do **not** add a Guard when FluentValidation already validates that id on the DTO.
 - **Mode:** auto-fix
 
 ---
