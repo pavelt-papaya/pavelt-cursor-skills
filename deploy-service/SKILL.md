@@ -120,6 +120,25 @@ Pick the **first** env that will be updated (priority: dev → staging → produ
 
 If multiple envs are being updated and their current tags differ, report all tags and ask which to use as the old-tag.
 
+### Semver vs helm (missing master)
+
+Before editing any yaml, compare the **semver part** of the requested version to the **semver part** of the current helm `image.tag` for **each** env in scope.
+
+The semver part is the leading `MAJOR.MINOR.PATCH` (everything before a `-` suffix). Compare numerically, not as strings.
+
+A helm tag **with a suffix** (`0.1.33-po-1779-balance-0016`) is already a branch build. Bumping that suffix at the same semver is not missing master — continue.
+
+A helm tag that **is only semver** (`0.1.61`) is master. A requested tag at that same semver (with or without suffix) is missing master's changes — stop.
+
+| Requested | Helm tag | Why | Action |
+|---|---|---|---|
+| `0.1.62` / `0.1.62-po-…` | `0.1.61` or `0.1.61-po-…` | requested semver higher | continue |
+| `0.1.33-po-1779-balance-0017` | `0.1.33-po-1779-balance-0016` | same semver, helm is already a branch version | continue |
+| `0.1.61-po-1779-balance-0001` | `0.1.61` | same semver, helm is master | **stop** |
+| `0.1.60` | `0.1.61` | requested semver lower | **stop** |
+
+If you must **stop**: do not create a branch, edit files, commit, or push. Notify the user that this tag is missing changes from master and they need to provide a new merged version. Include helm tag, requested tag, and the semver parts compared.
+
 ---
 
 ## Step 4 — Update `image.tag` in the selected env file(s)
@@ -176,4 +195,5 @@ Report:
 - **`<CI_REPO>` not present locally**: Report the missing path and ask the user to clone it (don't try to clone automatically).
 - **`<CI_REPO>` working tree is dirty**: Report `git status` and ask before continuing. Being on a non-`main` branch is not a stop — checkout and update `main` to the latest, then create the feature branch from it.
 - **Target env yaml file missing**: Report and ask whether to copy from dev or skip that env.
+- **Requested semver < helm semver**, or **equal semver while helm is a plain `MAJOR.MINOR.PATCH` (master)**: Stop. The tag is missing master; ask the user for a new merged version. Do not deploy. Same semver against a helm tag that already has a branch suffix is OK — proceed.
 - **`working_directory` confusion**: If `pwd` returns a path other than the one requested (sandbox silently ignored `cd`), switch to `git -C` and absolute paths immediately.

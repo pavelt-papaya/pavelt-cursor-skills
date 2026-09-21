@@ -1,35 +1,40 @@
 ---
 name: fix-dependency-model
-description: Fixes "Unhandled exception. System.IO.FileNotFoundException: Could not load file or assembly 'Microsoft.Extensions.DependencyModel'" in Shine/Playon .NET services by adding the package to the Host csproj and Directory.Packages.props. Use immediately and automatically when this exact exception or assembly-not-found error for Microsoft.Extensions.DependencyModel appears.
+description: Fixes AWS deploy crash "Could not load file or assembly 'Microsoft.Extensions.DependencyModel'" in Shine/Playon .NET services. Root cause is Dockerfile `dotnet publish` of the whole solution into one flat out/ folder — test projects (coverlet.collector) overwrite the host's DependencyModel. Fix by setting IsPublishable false on test projects. Use immediately when this exception, assembly-not-found for DependencyModel, or a coverlet/test-publish version clash appears. Do not add a Host PackageReference for DependencyModel.
 ---
 
-# Fix Microsoft.Extensions.DependencyModel Missing Assembly
+# Fix Microsoft.Extensions.DependencyModel publish clash
 
 ## Error
 
 ```
 Unhandled exception. System.IO.FileNotFoundException: Could not load file or assembly
-'Microsoft.Extensions.DependencyModel, Version=X.X.X.X, Culture=neutral, PublicKeyToken=...'
+'Microsoft.Extensions.DependencyModel, Version=10.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60'
 ```
+
+Serilog raises this while reading its configuration. It is a race: last writer to `out/` wins, so it only shows up after test-project or publish-order changes.
+
+## Root cause
+
+The Dockerfile runs `dotnet publish` on the **whole solution** into a single flat `out/` folder that becomes the runtime image.
+
+The solution includes test projects. `coverlet.collector` ships `Microsoft.Extensions.DependencyModel` 8.0.2; the Host needs 10.x. Both write the same filename. When coverlet's copy wins, the host asks the CLR for assembly version `10.0.0.0` and gets `8.0.0.0`.
+
+Do **not** pin or add `Microsoft.Extensions.DependencyModel` on the Host csproj / `Directory.Packages.props`. That papers over the clash; the next test dependency can still overwrite `out/`.
 
 ## Fix
 
-1. **Check if already in `Directory.Packages.props`** — search for `DependencyModel`. If present, update to latest version. If absent, add it.
-
-2. **Add/update in `Directory.Packages.props`** (latest version as of writing: `10.0.9` — verify with `dotnet package search Microsoft.Extensions.DependencyModel`):
-
-```xml
-<PackageVersion Include="Microsoft.Extensions.DependencyModel" Version="10.0.9" />
-```
-
-3. **Add to the Host csproj** (the startup project, e.g. `src/Shine.*.Host/*.csproj`):
+1. Find every test project (`*Tests*.csproj`, `*Test*.csproj`).
+2. Add `<IsPublishable>false</IsPublishable>` beside the existing `<IsPackable>false</IsPackable>` (add `IsPackable` too if missing):
 
 ```xml
-<PackageReference Include="Microsoft.Extensions.DependencyModel" />
+<PropertyGroup>
+  <IsPackable>false</IsPackable>
+  <IsPublishable>false</IsPublishable>
+</PropertyGroup>
 ```
 
-4. **Build to verify**:
-
-```bash
-dotnet build src/<ServiceName>.Host/<ServiceName>.Host.csproj -clp:ErrorsOnly
-```
+3. Verify with the **exact** `dotnet publish` from that repo's Dockerfile (usually `dotnet publish "<Solution>.sln" --no-restore -c Release -o out`).
+4. Confirm `out/` has no test binaries: no `Moq.dll`, no `*.Tests.dll`, no `coverlet.collector.deps.json`.
+5. Confirm the host `*.deps.json` has a single `Microsoft.Extensions.DependencyModel` expectation at the host version (e.g. `10.0.12`).
+6. Confirm tests still build and run (`dotnet test`).
