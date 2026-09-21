@@ -2,7 +2,8 @@
 name: prepare-for-review
 description: >-
   Prepares current branch changes for pull-request review: prints the recurring
-  review-nit checklist, scans the diff for those issues, and fixes them. Use
+  review-nit checklist, scans the diff for those issues, lists planned fixes,
+  then applies them. Use
   immediately and automatically when the user says "prepare for review",
   "prep for review", "prepare-for-review", "pepare-for-review", "ready for PR",
   "pre-review", "clean up for review", "fix review nits", or asks to catch
@@ -31,7 +32,7 @@ remembered, append a new item there in the same format.
 
 | User says | Behaviour |
 |---|---|
-| `prepare for review` / `prep for review` / `prepare-for-review` / `pepare-for-review` | Full pass: print checklist → analyze → fix |
+| `prepare for review` / `prep for review` / `prepare-for-review` / `pepare-for-review` | Full pass: print checklist → analyze → list planned changes → fix |
 | `ready for PR` / `pre-review` / `clean up for review` / `fix review nits` | Same |
 | `additional opinion` / `what else would AI flag` / `AI reviewer` / `reviewer opinion` | Opinion pass only (no edits unless they then ask to apply) |
 
@@ -69,16 +70,39 @@ Then start analysis. Do not skip this print.
 
 ---
 
-## Pass 2 — Analyze and fix
+## Pass 2 — Analyze, list, then fix
 
 For every item in [common-issues.md](common-issues.md):
 
 1. Search the diff (and nearby new files) for that issue.
-2. If found, **fix it** in the same pass using that item's fix rule.
+2. If found, record a planned change. Do **not** edit yet.
 3. Do not "improve" unrelated code. Do not apply items from the opinion pass.
 
+### Planned changes (mandatory, before any edit)
+
+After analysis and before the first file edit, print every planned fix as
+one line. Use catalog **id** as `type_of_issue`. Include a line range when
+the diff or file read gives you one; otherwise the file path only.
+
+```markdown
+Planned changes:
+
+- `comments` : `src/Foo.cs:12-18` : remove XML docs on `Bar`
+- `mapping` : `src/BarService.cs:40-47` : replace manual map with AutoMapper
+```
+
+Format each line exactly as:
+
+`type_of_issue` : `file:start-end` (or `file`) : how you are going to change it
+
+If nothing to fix, print `Planned changes: none` and skip to the report.
+
+Then apply the listed fixes. Do not apply anything that was not listed.
+
 After fixes, re-scan once for the same catalog so a fix did not introduce
-another catalog item (e.g. a rename that left a narration comment).
+another catalog item (e.g. a rename that left a narration comment). If the
+re-scan finds a new catalog hit, list it in the same format and fix it;
+do not silently edit.
 
 ### Report
 
