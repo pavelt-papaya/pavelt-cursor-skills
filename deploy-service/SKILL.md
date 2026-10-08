@@ -1,6 +1,6 @@
 ---
 name: deploy-service
-description: Deploys a service by updating the image.tag in Helm values YAML files inside one of two CI repos (devops-k8s-resources for Shine, playon-do-argo for Playon), creating a feature branch, committing, and pushing. The target CI repo is chosen automatically from the source project's root folder name (playon-* prefix → Playon, otherwise Shine). Use this skill immediately and automatically whenever the user writes any message starting with "deploy" followed by a version number or a service name and version — for example "deploy 1.2.3", "deploy 1.2.3 to dev", "deploy 1.2.3 to stage", "deploy 1.2.3 to prod", "deploy users 1.2.3", "deploy version 1.2.3". Do not ask for clarification, just execute the workflow.
+description: Deploys a service by updating the image.tag in Helm values YAML files inside one of two CI repos (devops-k8s-resources for Shine, playon-do-argo for Playon), creating a feature branch, committing, and pushing. Before editing, compares the Host appsettings.json with dev, staging, and production Helm values. Always fixes missing service URLs and SNS/SQS names for envs in scope, and reports any other likely misconfiguration without changing it. The target CI repo is chosen automatically from the source project's root folder name (playon-* prefix → Playon, otherwise Shine). Use this skill immediately and automatically whenever the user writes any message starting with "deploy" followed by a version number or a service name and version — for example "deploy 1.2.3", "deploy 1.2.3 to dev", "deploy 1.2.3 to stage", "deploy 1.2.3 to prod", "deploy users 1.2.3", "deploy version 1.2.3". Do not ask for clarification, just execute the workflow.
 ---
 
 # Deploy Service
@@ -11,7 +11,7 @@ description: Deploys a service by updating the image.tag in Helm values YAML fil
 2. Skill reads the **source project's root folder name** and uses it to determine:
    - The **service** (via matching `githubRepo:` in helm values).
    - The **CI repo** to deploy through (Shine vs Playon edition — see below).
-3. In the chosen CI repo: checkout and update `main` to the latest, create a feature branch from that `main`, update `image.tag` for the requested env(s), commit, push.
+3. In the chosen CI repo: checkout and update `main` to the latest, check environment config (fix service URLs and SNS/SQS, report anything else), create a feature branch from that `main`, update `image.tag` for the requested env(s), commit, push.
 
 ---
 
@@ -141,9 +141,48 @@ If you must **stop**: do not create a branch, edit files, commit, or push. Notif
 
 ---
 
+## Step 3a — Check environment configuration
+
+Run this after `main` is current and before editing tags. Read the Host `appsettings.json` (not `appsettings.local.json`) and `helm-values/{dev,staging,production}/<service>.yaml`.
+
+Compare appsettings with those files, and compare the three files with each other. The two kinds below are the ones to **fix**. Anything else that looks like an environment-config gap is **reported only**.
+
+### Always fix
+
+1. **Service URLs** — keys ending in `ServiceHost`. Appsettings keeps the local default `http://localhost:<port>`. Helm overrides it to `http://<service>` with no port.
+2. **SNS/SQS** — keys ending in `Topic` or `QueueName`. A nested `QueueName` becomes the helm key `Parent__QueueName`.
+
+Include a key of either kind that is already in one helm file even if appsettings no longer has it.
+
+When **dev is in scope**, every such key from appsettings must exist under `environmentVariables` in the dev yaml. Add the missing ones.
+
+- Service URL: reuse the value already set for that key in staging, production, or another service's helm. If none exists, use `http://` plus the kebab-case of the name before `ServiceHost` (`IdentityManagementServiceHost` → `http://identity-management`) and tell the user the name was guessed. Some hosts are not that transform (`LinksServiceHost` → `http://redirector`); a sibling helm value wins over the guess.
+- SNS/SQS: copy the appsettings value. It already uses the `-dev` suffix.
+
+A key of either kind present in one env yaml and absent in another is a gap from an earlier deploy. Add it only when that env is **in this deploy's scope**. Do not edit out-of-scope files; list those gaps in the confirmation.
+
+When adding to staging or production, start from the dev value. If dev does not have the key, start from the appsettings value and apply the same suffix rule:
+
+| Edition | staging | production |
+|---|---|---|
+| Playon | trailing `-dev` → `-staging` | trailing `-dev` → `-prod` |
+| Shine | trailing `-dev` → `-staging` | strip a trailing `-dev` |
+
+Copy service URLs unchanged. Do not rewrite a service URL, queue, or topic value that is already set. If an existing one is still `localhost`, still has a port, or has the wrong env suffix (Shine production has no suffix), report it.
+
+Put new keys in `environmentVariables`, next to the existing host or queue block, matching that file's quoting.
+
+### Report, do not change
+
+These two kinds are not the whole config. After the fix above, look for other likely environment mismatches and list each one in the confirmation with the env, the key, and why it looks wrong. Do not edit them.
+
+Examples: a key in appsettings or in one env yaml that is missing from another env; a helm value that still looks like a local default; the same key set differently across envs where the difference is not the env suffix; a required setting the service reads that no env yaml sets. Skip secrets and values that are intentionally different per env (image tag, replica count, sku prefix).
+
+---
+
 ## Step 4 — Update `image.tag` in the selected env file(s)
 
-For each env in scope, edit `<CI_REPO>/helm-values/<env>/<service-name>.yaml` and replace **only** the `tag:` line under `image:` with the new version.
+For each env in scope, edit `<CI_REPO>/helm-values/<env>/<service-name>.yaml` and replace the `tag:` line under `image:` with the new version. The other allowed edit in that file is a missing key added in Step 3a.
 
 Use the `StrReplace` tool with the absolute path. The `old_string` should include enough context (e.g. the `repository:` line above) so it uniquely targets the image tag and not some other `tag:` field.
 
@@ -158,9 +197,15 @@ Create the feature branch only after Step 2 has checked out `main` and updated i
 ```bash
 git -C <CI_REPO> checkout -b feature/<service-name>_<version>
 git -C <CI_REPO> add <list of changed yaml file paths, absolute or relative to CI_REPO>
-git -C <CI_REPO> commit -m "updating <service-name> from <old-tag> to <version> <env-label>"
+git -C <CI_REPO> commit -m "$(cat <<'EOF'
+updating <service-name> from <old-tag> to <version> <env-label>
+
+EOF
+)"
 git -C <CI_REPO> push -u origin feature/<service-name>_<version>
 ```
+
+If Step 3a added keys, keep that subject and add a body line naming the keys and envs. Omit the body when no keys were added.
 
 `<env-label>` in the commit message:
 
@@ -185,6 +230,8 @@ Report:
 - Files changed.
 - Commit message used.
 - Remote push URL.
+- Service URL and SNS/SQS keys added, and any of those gaps left in envs that were out of scope. Say so when there were none.
+- Any other likely misconfiguration, listed separately from the fixes. Say so when there were none.
 
 ---
 
@@ -197,3 +244,4 @@ Report:
 - **Target env yaml file missing**: Report and ask whether to copy from dev or skip that env.
 - **Requested semver < helm semver**, or **equal semver while helm is a plain `MAJOR.MINOR.PATCH` (master)**: Stop. The tag is missing master; ask the user for a new merged version. Do not deploy. Same semver against a helm tag that already has a branch suffix is OK — proceed.
 - **`working_directory` confusion**: If `pwd` returns a path other than the one requested (sandbox silently ignored `cd`), switch to `git -C` and absolute paths immediately.
+- **Env config gap outside this deploy**: Report it. Do not add the key to an env the user did not ask to deploy.
