@@ -55,3 +55,6 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# Symlink to ai-agent-tooling; the skill lives in that repo
+/dotnet-development

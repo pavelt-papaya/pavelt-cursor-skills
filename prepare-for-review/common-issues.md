@@ -143,13 +143,28 @@ Format for new items:
 
 - **Detect:** Happy path does `GetX` then `UpdateX` (or two repository calls)
   when the update/filter can enforce the pre-condition in one operation, or
-  when the second call already loads what the first loaded.
-- **Fix:** Collapse to the single repository operation used elsewhere in the
-  project, if that is a mechanical change. If it requires a new repository
-  method or a behaviour change, **Mode becomes ask-before-redesign** for this
-  hit — list it under Skipped with one sentence why.
+  when the second call already loads what the first loaded. Same hit when the
+  code loads a document, throws if it is missing or in the wrong state, and
+  only then updates it by id.
+- **Fix:** One update whose filter is the pre-condition. Return
+  `MatchedCount` or `ModifiedCount` and throw when it is 0. Do not keep the
+  read on the success path. If that needs a new repository method or changes
+  which error is thrown, **Mode becomes ask-before-redesign** for this hit —
+  list it under Skipped with one sentence why.
 - **Mode:** auto-fix when collapsing is local and equivalent; otherwise
   ask-before-redesign
+
+---
+
+## `atomic-update` — One document, one update
+
+- **Detect:** Two or more `UpdateOneAsync` / `UpdateManyAsync` calls in one
+  method that set different fields of the same document, with no read or
+  branch between them that needs the first write to finish first.
+- **Fix:** Chain the `Set` calls on one update definition and send them in one
+  `UpdateOneAsync` with the same filter.
+- **Mode:** auto-fix when both writes use the same filter and nothing between
+  them uses the first result. Otherwise ask-before-redesign for that hit.
 
 ---
 
