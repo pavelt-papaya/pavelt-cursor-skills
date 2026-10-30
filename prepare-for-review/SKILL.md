@@ -97,7 +97,14 @@ Format each line exactly as:
 
 If nothing to fix, print `Planned changes: none` and skip to the report.
 
-Then apply the listed fixes. Do not apply anything that was not listed.
+Items with **Mode** `confirm` are not edits yet. Before you change them, ask
+with the choices in that catalog item. For `release-versions`, the three
+choices are: make it a release version, keep as is, or use a version the user
+types in the custom answer field. Apply only that answer. **Keep as is** goes
+under **Skipped**. Do not strip a suffix while you wait.
+
+Then apply the listed fixes, including the confirmed choice. Do not apply
+anything that was not listed.
 
 After fixes, re-scan once for the same catalog so a fix did not introduce
 another catalog item (e.g. a rename that left a narration comment). If the

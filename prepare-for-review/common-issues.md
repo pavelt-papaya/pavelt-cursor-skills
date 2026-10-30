@@ -15,6 +15,7 @@ Format for new items:
 
 `auto-fix`: change the code in pass 2.
 `ask-before-redesign`: report under **Skipped** and wait; do not delete or redesign.
+`confirm`: ask the user with the choices in that item, then apply only the choice.
 
 ---
 
@@ -185,6 +186,25 @@ Format for new items:
 - **Detect:** `.sln` `SolutionConfigurationPlatforms` or `ProjectConfigurationPlatforms` entries for `x86` (e.g. `Debug|x86`, `Release|x86`), or a changed `.csproj` that lists `x86` in `<Platforms>` / `<PlatformTarget>`. These usually appear when a project is added in the IDE.
 - **Fix:** Remove every x86 solution configuration and its per-project mappings. Leave `Debug|Any CPU` and `Release|Any CPU`. If a csproj in the diff added `x86` to `<Platforms>` or set `<PlatformTarget>x86</PlatformTarget>`, drop that too so the project matches AnyCPU-only neighbours.
 - **Mode:** auto-fix
+
+---
+
+## `release-versions` — Release versions for our libraries
+
+- **Detect:** A new or changed `InfraVersion`, `PlayonInfraVersion`, or
+  `PackageVersion` / `PackageReference` for `Shine.Infra.*` or `Shine.Playon.*`
+  whose version has a prerelease suffix (a `-` after `MAJOR.MINOR.PATCH`).
+  Branch builds look like `1.0.898-po-1838-day-limi0002`. Third-party packages
+  are out of scope.
+- **Fix:** Do not change the version until the user answers. A suffix can be
+  the only build on the feed, so stripping it can be wrong. Ask once per
+  distinct version (one question covers every package that uses
+  `$(InfraVersion)` or `$(PlayonInfraVersion)`). Use the question tool with:
+  1. **Make it a release version** — keep `MAJOR.MINOR.PATCH` and drop the suffix.
+  2. **Keep as is** — leave the pin. Report it under **Skipped**.
+  3. **Use this version** — the user types the version in the custom answer
+     field. Write that text as the version. Do not strip or add a suffix.
+- **Mode:** confirm
 
 ---
 
